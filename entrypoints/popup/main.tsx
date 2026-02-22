@@ -1,0 +1,4 @@
+import ReactDOM from 'react-dom/client';
+import PopupApp from './App';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(<PopupApp />);

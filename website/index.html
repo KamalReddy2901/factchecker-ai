@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FactChecker AI — The fact-checker that actually works</title>
+  <meta name="description" content="Highlight any text or screenshot anything on screen — AI instantly verifies it with real-time sources. Free forever. No sign-up." />
+  <meta property="og:title" content="FactChecker AI" />
+  <meta property="og:description" content="The fact-checker that actually works. AI-powered, real-time, free forever." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <style>
+    /* ── Reset ──────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    /* ── Design tokens ───────────────────────────────────────────────────── */
+    :root {
+      --bg:           #06060f;
+      --bg-card:      rgba(255,255,255,0.04);
+      --border:       rgba(255,255,255,0.07);
+      --border-light: rgba(255,255,255,0.12);
+      --text:         rgba(255,255,255,0.92);
+      --muted:        rgba(255,255,255,0.50);
+      --faint:        rgba(255,255,255,0.22);
+      --purple:       #7c3aed;
+      --purple-dim:   #6d28d9;
+      --blue:         #2563eb;
+      --green:        #34d399;
+      --amber:        #fbbf24;
+      --red:          #f87171;
+      --radius:       20px;
+      --radius-sm:    12px;
+      --nav-h:        64px;
+      --font:         -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    }
+
+    /* ── Base ──────────────────────────────────────────────────────────── */
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { cursor: pointer; font-family: var(--font); }
+
+    /* ── Background ────────────────────────────────────────────────────── */
+    .bg-grid {
+      position: fixed; inset: 0;
+      background-image:
+        radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px);
+      background-size: 36px 36px;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(110px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .orb-1 {
+      width: 700px; height: 700px;
+      background: radial-gradient(circle, rgba(124,58,237,0.28) 0%, transparent 70%);
+      top: -260px; left: -200px;
+      animation: drift1 24s ease-in-out infinite;
+    }
+    .orb-2 {
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(37,99,235,0.22) 0%, transparent 70%);
+      top: 30%; right: -200px;
+      animation: drift2 30s ease-in-out infinite;
+    }
+    .orb-3 {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(124,58,237,0.16) 0%, transparent 70%);
+      bottom: -150px; left: 30%;
+      animation: drift3 20s ease-in-out infinite;
+    }
+    @keyframes drift1 {
+      0%,100% { transform: translate(0,0) scale(1); }
+      33%      { transform: translate(60px, 50px) scale(1.06); }
+      66%      { transform: translate(-40px, 70px) scale(0.94); }
+    }
+    @keyframes drift2 {
+      0%,100% { transform: translate(0,0) scale(1); }
+      50%     { transform: translate(-80px, 60px) scale(1.08); }
+    }
+    @keyframes drift3 {
+      0%,100% { transform: translate(0,0) scale(1); }
+      40%     { transform: translate(50px,-40px) scale(1.05); }
+      80%     { transform: translate(-30px, 30px) scale(0.96); }
+    }
+
+    /* ── Utilities ─────────────────────────────────────────────────────── */
+    .z1 { position: relative; z-index: 1; }
+    .glass {
+      background: rgba(255,255,255,0.04);
+      backdrop-filter: blur(24px) saturate(160%);
+      -webkit-backdrop-filter: blur(24px) saturate(160%);
+      border: 1px solid var(--border-light);
+    }
+    .grad-text {
+      background: linear-gradient(135deg, #a78bfa 0%, #60a5fa 60%, #a78bfa 100%);
+      background-size: 200% 200%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: grad-shift 6s ease-in-out infinite;
+    }
+    @keyframes grad-shift {
+      0%,100% { background-position: 0% 50%; }
+      50%     { background-position: 100% 50%; }
+    }
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg, var(--purple), var(--blue));
+      border: none; border-radius: 14px;
+      padding: 13px 26px;
+      color: white; font-size: 15px; font-weight: 700;
+      letter-spacing: 0.01em;
+      box-shadow: 0 4px 24px rgba(124,58,237,0.45);
+      transition: transform 0.18s, box-shadow 0.18s, opacity 0.18s;
+      white-space: nowrap;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(124,58,237,0.55);
+    }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-ghost {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      padding: 13px 24px;
+      color: var(--muted); font-size: 15px; font-weight: 600;
+      transition: all 0.18s;
+      white-space: nowrap;
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.12); color: var(--text); }
+    .section-label {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+    .section-label::before {
+      content: '';
+      display: block; width: 20px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--purple));
+    }
+    .section-label::after {
+      content: '';
+      display: block; width: 20px; height: 1px;
+      background: linear-gradient(90deg, var(--purple), transparent);
+    }
+
+    /* ── Nav ───────────────────────────────────────────────────────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      z-index: 1000; height: var(--nav-h);
+      display: flex; align-items: center;
+      padding: 0 5%;
+      border-bottom: 1px solid transparent;
+      transition: background 0.3s, border-color 0.3s;
+    }
+    nav.scrolled {
+      background: rgba(6,6,15,0.7);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom-color: var(--border);
+    }
+    .nav-inner {
+      width: 100%; max-width: 1200px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .nav-logo-icon {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--purple), var(--blue));
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 12px rgba(124,58,237,0.4);
+      flex-shrink: 0;
+    }
+    .nav-name {
+      font-size: 16px; font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .nav-links {
+      display: flex; align-items: center; gap: 32px;
+      list-style: none;
+    }
+    .nav-links a {
+      color: var(--muted); font-size: 14px; font-weight: 500;
+      transition: color 0.15s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta {
+      background: linear-gradient(135deg, var(--purple), var(--blue));
+      border: none; border-radius: 10px;
+      padding: 8px 18px;
+      color: white; font-size: 13px; font-weight: 700;
+      box-shadow: 0 2px 12px rgba(124,58,237,0.35);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(124,58,237,0.5); }
+
+    /* ── Sections ───────────────────────────────────────────────────────── */
+    section {
+      position: relative; z-index: 1;
+      padding: 100px 5%;
+    }
+    .inner { max-width: 1200px; margin: 0 auto; }
+    .section-head { text-align: center; margin-bottom: 64px; }
+    .section-head h2 {
+      font-size: clamp(28px, 4vw, 44px);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-top: 12px;
+      line-height: 1.15;
+    }
+    .section-head p {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: clamp(14px, 1.8vw, 17px);
+      max-width: 560px;
+      margin-left: auto; margin-right: auto;
+      line-height: 1.65;
+    }
+
+    /* ── Hero ─────────────────────────────────────────────────────────── */
+    #hero {
+      min-height: 100vh;
+      padding-top: calc(var(--nav-h) + 60px);
+      padding-bottom: 80px;
+      display: flex; align-items: center;
+    }
+    .hero-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(124,58,237,0.12);
+      border: 1px solid rgba(124,58,237,0.3);
+      border-radius: 100px;
+      padding: 6px 14px 6px 8px;
+      font-size: 12px; font-weight: 600;
+      color: rgba(167,139,250,0.9);
+      letter-spacing: 0.02em;
+      margin-bottom: 26px;
+    }
+    .hero-badge-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #8b5cf6;
+      animation: pulse-badge 2s ease-in-out infinite;
+    }
+    @keyframes pulse-badge {
+      0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(139,92,246,0.5); }
+      50%     { opacity: 0.7; box-shadow: 0 0 0 4px rgba(139,92,246,0); }
+    }
+    .hero-h1 {
+      font-size: clamp(40px, 5.5vw, 72px);
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      line-height: 1.05;
+      margin-bottom: 20px;
+    }
+    .hero-h1 span { display: block; }
+    .hero-sub {
+      font-size: clamp(15px, 1.8vw, 18px);
+      color: var(--muted);
+      line-height: 1.7;
+      max-width: 520px;
+      margin-bottom: 36px;
+    }
+    .hero-ctas {
+      display: flex; flex-wrap: wrap; gap: 12px;
+      margin-bottom: 40px;
+    }
+    .hero-browsers {
+      display: flex; align-items: center; gap: 10px;
+      flex-wrap: wrap;
+    }
+    .hero-browsers-label {
+      font-size: 12px; color: var(--faint);
+      font-weight: 500;
+    }
+    .browser-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 100px;
+      padding: 4px 10px; font-size: 12px; font-weight: 500;
+      color: var(--muted);
+    }
+    .browser-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+    }
+
+    /* ── Widget mock (right side of hero) ─────────────────────────────── */
+    .hero-right {
+      display: flex; justify-content: center; align-items: center;
+      position: relative;
+    }
+    .widget-glow {
+      position: absolute; inset: -40px;
+      background: radial-gradient(ellipse at center, rgba(124,58,237,0.18) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .widget-mock {
+      width: 340px;
+      background: rgba(10,10,22,0.85);
+      backdrop-filter: blur(28px) saturate(180%);
+      -webkit-backdrop-filter: blur(28px) saturate(180%);
+      border: 1px solid rgba(255,255,255,0.11);
+      border-radius: 20px;
+      padding: 18px 20px 20px;
+      display: flex; flex-direction: column; gap: 14px;
+      box-shadow:
+        0 0 0 1px rgba(251,191,36,0.2),
+        0 0 28px rgba(251,191,36,0.12),
+        0 24px 64px rgba(0,0,0,0.5);
+      transform: perspective(900px) rotateY(-5deg) rotateX(2deg);
+      transition: transform 0.4s ease;
+    }
+    .widget-mock:hover {
+      transform: perspective(900px) rotateY(0deg) rotateX(0deg);
+    }
+    .wm-header {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .wm-logo-row {
+      display: flex; align-items: center; gap: 7px;
+    }
+    .wm-logo-icon {
+      width: 18px; height: 18px; opacity: 0.85;
+    }
+    .wm-title {
+      color: rgba(255,255,255,0.5);
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.1em;
+    }
+    .wm-close {
+      width: 24px; height: 24px; border-radius: 7px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.4);
+      font-size: 13px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .wm-claim-label {
+      font-size: 11px; color: rgba(255,255,255,0.3);
+      font-style: italic; line-height: 1.45;
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .wm-claim-label em { font-style: normal; color: rgba(255,255,255,0.55); }
+    .wm-verdict {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 14px 6px 10px;
+      border-radius: 100px; align-self: flex-start;
+      background: rgba(251,191,36,0.12);
+      border: 1px solid rgba(251,191,36,0.28);
+    }
+    .wm-verdict-icon {
+      width: 22px; height: 22px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(251,191,36,0.12);
+      border: 1.5px solid rgba(251,191,36,0.9);
+      color: #fbbf24; font-size: 11px; font-weight: 800;
+      flex-shrink: 0;
+    }
+    .wm-verdict-label {
+      color: #fbbf24; font-weight: 700; font-size: 15px;
+      letter-spacing: 0.01em;
+    }
+    .wm-conf-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 6px;
+    }
+    .wm-conf-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: rgba(255,255,255,0.35);
+    }
+    .wm-conf-pct {
+      font-size: 13px; font-weight: 700;
+      color: rgba(255,255,255,0.75);
+    }
+    .wm-conf-track {
+      height: 4px; border-radius: 4px;
+      background: rgba(255,255,255,0.07); overflow: hidden;
+    }
+    .wm-conf-fill {
+      height: 100%; border-radius: 4px;
+      background: #fbbf24; opacity: 0.85;
+      width: 0;
+      animation: fill-bar 1.4s 0.6s cubic-bezier(0.22,1,0.36,1) forwards;
+    }
+    @keyframes fill-bar { to { width: 72%; } }
+    .wm-summary {
+      font-size: 13px; line-height: 1.6;
+      color: rgba(255,255,255,0.75);
+    }
+    .wm-sources-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: rgba(255,255,255,0.3);
+      margin-bottom: 7px;
+    }
+    .wm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .wm-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 9px; border-radius: 100px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+      font-size: 11px; color: rgba(255,255,255,0.6);
+    }
+    .wm-chip-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: rgba(255,255,255,0.25); flex-shrink: 0;
+    }
+
+    /* ── Proof bar ─────────────────────────────────────────────────────── */
+    #proof {
+      padding: 32px 5%;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .proof-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: center;
+      gap: clamp(24px, 5%, 80px);
+      flex-wrap: wrap;
+    }
+    .proof-item {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 4px; text-align: center;
+    }
+    .proof-num {
+      font-size: 28px; font-weight: 900; letter-spacing: -0.03em;
+    }
+    .proof-desc {
+      font-size: 13px; color: var(--muted); font-weight: 500;
+    }
+    .proof-sep {
+      width: 1px; height: 40px; background: var(--border); flex-shrink: 0;
+    }
+
+    /* ── How it works ─────────────────────────────────────────────────── */
+    #how { background: none; }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+      position: relative;
+    }
+    .step {
+      display: flex; flex-direction: column;
+      padding: 36px 28px;
+      border-radius: var(--radius);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      position: relative;
+      transition: border-color 0.25s, transform 0.25s;
+    }
+    .step:hover {
+      border-color: rgba(124,58,237,0.35);
+      transform: translateY(-4px);
+    }
+    .step-num {
+      width: 42px; height: 42px; border-radius: 13px;
+      background: linear-gradient(135deg, var(--purple), var(--blue));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 900;
+      color: white; margin-bottom: 20px;
+      box-shadow: 0 4px 16px rgba(124,58,237,0.4);
+      flex-shrink: 0;
+    }
+    .step h3 {
+      font-size: 18px; font-weight: 700;
+      margin-bottom: 10px; letter-spacing: -0.01em;
+    }
+    .step p {
+      font-size: 14px; color: var(--muted);
+      line-height: 1.65; flex: 1;
+    }
+    .step-connector {
+      position: absolute; top: 50%; right: -20px;
+      width: 38px; height: 38px;
+      transform: translateY(-50%);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--faint); font-size: 18px;
+      z-index: 2;
+      pointer-events: none;
+    }
+    .step-tags {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px;
+    }
+    .step-tag {
+      padding: 3px 9px; border-radius: 100px;
+      background: rgba(124,58,237,0.12);
+      border: 1px solid rgba(124,58,237,0.25);
+      font-size: 11px; font-weight: 600;
+      color: rgba(167,139,250,0.85);
+    }
+
+    /* ── Features ─────────────────────────────────────────────────────── */
+    #features { background: none; }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .feat-card {
+      padding: 28px;
+      border-radius: var(--radius);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+      cursor: default;
+    }
+    .feat-card:hover {
+      border-color: rgba(255,255,255,0.15);
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+    }
+    .feat-icon {
+      width: 44px; height: 44px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; margin-bottom: 18px;
+      flex-shrink: 0;
+    }
+    .feat-card h3 {
+      font-size: 16px; font-weight: 700; margin-bottom: 8px;
+      letter-spacing: -0.01em;
+    }
+    .feat-card p { font-size: 13.5px; color: var(--muted); line-height: 1.65; }
+
+    /* ── Verdict types showcase ───────────────────────────────────────── */
+    #verdicts { background: none; padding-top: 0; }
+    .verdicts-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .verdict-card {
+      padding: 20px;
+      border-radius: 16px;
+      border: 1px solid;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .verdict-card:hover { transform: translateY(-3px); }
+    .verdict-card-icon {
+      width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 800;
+      margin-bottom: 12px;
+    }
+    .verdict-card h4 { font-size: 16px; font-weight: 700; margin-bottom: 5px; }
+    .verdict-card p { font-size: 12px; opacity: 0.65; line-height: 1.5; }
+    .vc-true  { background: rgba(52,211,153,0.08); border-color: rgba(52,211,153,0.25); }
+    .vc-false { background: rgba(248,113,113,0.08); border-color: rgba(248,113,113,0.25); }
+    .vc-mis   { background: rgba(251,191,36,0.08);  border-color: rgba(251,191,36,0.25);  }
+    .vc-unv   { background: rgba(148,163,184,0.06); border-color: rgba(148,163,184,0.2);  }
+
+    /* ── Browsers ─────────────────────────────────────────────────────── */
+    #browsers { background: none; }
+    .browsers-row {
+      display: flex; justify-content: center; align-items: stretch;
+      gap: 16px; flex-wrap: wrap;
+    }
+    .browser-card {
+      padding: 28px 32px;
+      border-radius: var(--radius);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      min-width: 150px;
+      transition: border-color 0.25s, transform 0.2s;
+    }
+    .browser-card:hover {
+      border-color: rgba(255,255,255,0.15);
+      transform: translateY(-3px);
+    }
+    .browser-card-icon {
+      width: 48px; height: 48px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+    }
+    .browser-card h4 { font-size: 15px; font-weight: 700; }
+    .browser-card p { font-size: 12px; color: var(--muted); text-align: center; line-height: 1.45; }
+    .browser-note {
+      text-align: center; margin-top: 28px;
+      font-size: 14px; color: var(--faint);
+    }
+
+    /* ── Download CTA ────────────────────────────────────────────────── */
+    #download {
+      padding: 120px 5%;
+    }
+    .cta-box {
+      max-width: 760px; margin: 0 auto;
+      text-align: center; padding: 64px 48px;
+      border-radius: 28px;
+      background: rgba(124,58,237,0.07);
+      border: 1px solid rgba(124,58,237,0.2);
+      box-shadow:
+        0 0 80px rgba(124,58,237,0.12),
+        0 0 160px rgba(37,99,235,0.08);
+    }
+    .cta-box h2 {
+      font-size: clamp(28px, 4vw, 48px);
+      font-weight: 900; letter-spacing: -0.04em;
+      line-height: 1.1; margin-bottom: 16px;
+    }
+    .cta-box p {
+      font-size: 17px; color: var(--muted);
+      margin-bottom: 40px; line-height: 1.65;
+    }
+    .cta-steps {
+      display: flex; align-items: center; justify-content: center;
+      gap: 16px; flex-wrap: wrap; margin-bottom: 36px;
+    }
+    .cta-step {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .cta-step-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--purple), var(--blue));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 800; color: white;
+      flex-shrink: 0;
+    }
+    .cta-step-text { font-size: 14px; font-weight: 600; color: var(--muted); }
+    .cta-step-text a {
+      color: rgba(167,139,250,0.9);
+      text-decoration: underline;
+    }
+    .cta-arrow { color: var(--faint); font-size: 16px; }
+    .cta-trust {
+      margin-top: 20px;
+      display: flex; align-items: center; justify-content: center;
+      gap: 20px; flex-wrap: wrap;
+    }
+    .cta-trust-item {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; color: var(--faint);
+    }
+
+    /* ── Footer ───────────────────────────────────────────────────────── */
+    footer {
+      position: relative; z-index: 1;
+      padding: 40px 5%;
+      border-top: 1px solid var(--border);
+    }
+    .footer-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 20px;
+    }
+    .footer-logo {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .footer-logo-icon {
+      width: 28px; height: 28px; border-radius: 8px;
+      background: linear-gradient(135deg, var(--purple), var(--blue));
+      display: flex; align-items: center; justify-content: center;
+    }
+    .footer-logo-name { font-size: 14px; font-weight: 700; }
+    .footer-links {
+      display: flex; align-items: center; gap: 24px;
+      list-style: none; flex-wrap: wrap;
+    }
+    .footer-links a {
+      font-size: 13px; color: var(--faint);
+      transition: color 0.15s;
+    }
+    .footer-links a:hover { color: var(--muted); }
+    .footer-made {
+      font-size: 13px; color: var(--faint);
+    }
+
+    /* ── Scroll animations ─────────────────────────────────────────────── */
+    .fade-up {
+      opacity: 0; transform: translateY(28px);
+      transition: opacity 0.65s ease, transform 0.65s ease;
+    }
+    .fade-up.visible {
+      opacity: 1; transform: translateY(0);
+    }
+    .fade-up-d1 { transition-delay: 0.1s; }
+    .fade-up-d2 { transition-delay: 0.2s; }
+    .fade-up-d3 { transition-delay: 0.3s; }
+    .fade-up-d4 { transition-delay: 0.4s; }
+    .fade-up-d5 { transition-delay: 0.5s; }
+
+    /* ── Responsive ────────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .hero-inner  { grid-template-columns: 1fr; gap: 48px; }
+      .hero-right  { order: -1; }
+      .widget-mock { transform: none; }
+      .steps        { grid-template-columns: 1fr; }
+      .features-grid{ grid-template-columns: 1fr 1fr; }
+      .verdicts-row { grid-template-columns: 1fr 1fr; }
+      .step-connector { display: none; }
+    }
+    @media (max-width: 600px) {
+      nav { padding: 0 16px; }
+      section { padding: 64px 16px; }
+      #hero { padding-top: calc(var(--nav-h) + 40px); padding-bottom: 48px; }
+      .hero-inner { gap: 32px; }
+      .hero-h1 { font-size: 38px; }
+      .features-grid { grid-template-columns: 1fr; }
+      .verdicts-row  { grid-template-columns: 1fr 1fr; }
+      .browsers-row  { gap: 10px; }
+      .browser-card  { min-width: 130px; padding: 22px 20px; }
+      .nav-links     { display: none; }
+      .cta-box       { padding: 40px 24px; }
+      .proof-sep     { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Ambient background -->
+  <div class="bg-grid"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <!-- ── Navigation ───────────────────────────────────────────────────── -->
+  <nav id="nav">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">
+        <div class="nav-logo-icon">
+          <svg width="20" height="20" viewBox="0 0 100 100" fill="none">
+            <circle cx="43" cy="43" r="21" stroke="white" stroke-width="9" stroke-linecap="round"/>
+            <path d="M33 43 L40 51 L55 33" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="59" y1="59" x2="75" y2="76" stroke="white" stroke-width="9.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="nav-name"><span class="grad-text">FactChecker AI</span></span>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#browsers">Browsers</a></li>
+      </ul>
+
+      <a href="#download" class="nav-cta">Add to your browser — Free →</a>
+    </div>
+  </nav>
+
+  <!-- ── Hero ─────────────────────────────────────────────────────────── -->
+  <section id="hero">
+    <div class="hero-inner inner">
+
+      <!-- Left: copy -->
+      <div class="hero-left">
+        <div class="hero-badge">
+          <span class="hero-badge-dot"></span>
+          Powered by Gemini AI &nbsp;·&nbsp; Free tier forever
+        </div>
+
+        <h1 class="hero-h1">
+          <span>The fact-checker</span>
+          <span class="grad-text">that actually works.</span>
+        </h1>
+
+        <p class="hero-sub">
+          Screenshot any content or highlight any text — and AI instantly verifies it
+          with real-time web search and cited sources. No subscriptions. No sign-ups.
+          Free forever.
+        </p>
+
+        <div class="hero-ctas">
+          <a href="#download" class="btn-primary">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M8 11L4 7h2.5V2h3v5H12L8 11Z" fill="white"/>
+              <path d="M2 14h12" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            Download Free Extension
+          </a>
+          <a href="#how" class="btn-ghost">
+            See how it works ↓
+          </a>
+        </div>
+
+        <div class="hero-browsers">
+          <span class="hero-browsers-label">Works on:</span>
+          <span class="browser-pill"><span class="browser-dot" style="background:#4285f4"></span>Chrome</span>
+          <span class="browser-pill"><span class="browser-dot" style="background:#e0522b"></span>Brave</span>
+          <span class="browser-pill"><span class="browser-dot" style="background:#0078d7"></span>Edge</span>
+          <span class="browser-pill"><span class="browser-dot" style="background:#f00"></span>Opera</span>
+          <span class="browser-pill" style="color:rgba(255,255,255,0.4);border-color:rgba(255,255,255,0.08);">+ many more</span>
+        </div>
+      </div>
+
+      <!-- Right: animated widget mockup -->
+      <div class="hero-right">
+        <div class="widget-glow"></div>
+        <div class="widget-mock">
+
+          <div class="wm-header">
+            <div class="wm-logo-row">
+              <svg class="wm-logo-icon" viewBox="0 0 100 100" fill="none">
+                <circle cx="43" cy="43" r="21" stroke="rgba(139,92,246,0.9)" stroke-width="9"/>
+                <path d="M33 43 L40 51 L55 33" stroke="rgba(139,92,246,0.9)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+                <line x1="59" y1="59" x2="75" y2="76" stroke="rgba(139,92,246,0.9)" stroke-width="9.5" stroke-linecap="round"/>
+              </svg>
+              <span class="wm-title">FactChecker AI</span>
+            </div>
+            <div class="wm-close">×</div>
+          </div>
+
+          <div class="wm-claim-label">
+            Checking: <em>"Drinking 8 glasses of water a day is scientifically required for good health"</em>
+          </div>
+
+          <div class="wm-verdict">
+            <div class="wm-verdict-icon">⚠</div>
+            <span class="wm-verdict-label">Misleading</span>
+          </div>
+
+          <div>
+            <div class="wm-conf-header">
+              <span class="wm-conf-label">Confidence</span>
+              <span class="wm-conf-pct">72%</span>
+            </div>
+            <div class="wm-conf-track">
+              <div class="wm-conf-fill"></div>
+            </div>
+          </div>
+
+          <p class="wm-summary">
+            The "8 glasses" rule is a popular simplification without robust scientific
+            backing. Actual hydration needs vary by body weight, climate, and activity.
+            No major health body endorses a fixed quantity.
+          </p>
+
+          <div>
+            <div class="wm-sources-label">Sources</div>
+            <div class="wm-chips">
+              <span class="wm-chip"><span class="wm-chip-dot"></span>nejm.org</span>
+              <span class="wm-chip"><span class="wm-chip-dot"></span>mayoclinic.org</span>
+              <span class="wm-chip"><span class="wm-chip-dot"></span>snopes.com</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Proof bar ─────────────────────────────────────────────────────── -->
+  <div id="proof" class="z1">
+    <div class="proof-inner">
+      <div class="proof-item fade-up">
+        <span class="proof-num grad-text">~3 sec</span>
+        <span class="proof-desc">Average verdict time</span>
+      </div>
+      <div class="proof-sep"></div>
+      <div class="proof-item fade-up fade-up-d1">
+        <span class="proof-num grad-text">4</span>
+        <span class="proof-desc">Verdict types with nuance</span>
+      </div>
+      <div class="proof-sep"></div>
+      <div class="proof-item fade-up fade-up-d2">
+        <span class="proof-num grad-text">1,500</span>
+        <span class="proof-desc">Free checks per day</span>
+      </div>
+      <div class="proof-sep"></div>
+      <div class="proof-item fade-up fade-up-d3">
+        <span class="proof-num grad-text">0</span>
+        <span class="proof-desc">Servers. No data leaves your device.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── How it works ───────────────────────────────────────────────────── -->
+  <section id="how">
+    <div class="inner">
+      <div class="section-head fade-up">
+        <div class="section-label">How it works</div>
+        <h2>Three steps to the truth.</h2>
+        <p>
+          A three-pass AI pipeline that reads any claim, searches the live web,
+          and returns a verdict — all in seconds.
+        </p>
+      </div>
+
+      <div class="steps">
+
+        <div class="step fade-up">
+          <div class="step-num">1</div>
+          <h3>Screenshot or highlight</h3>
+          <p>
+            Click the extension icon and drag to select any area on screen —
+            images, headlines, tweets, video captions. Or highlight any text
+            and right-click → "Fact-check this."
+          </p>
+          <div class="step-tags">
+            <span class="step-tag">Screenshot mode</span>
+            <span class="step-tag">Text selection</span>
+            <span class="step-tag">Right-click menu</span>
+          </div>
+          <div class="step-connector">→</div>
+        </div>
+
+        <div class="step fade-up fade-up-d1">
+          <div class="step-num">2</div>
+          <h3>AI reads &amp; searches</h3>
+          <p>
+            Gemini AI extracts the verifiable claim, then uses
+            Google's live search index to find evidence across news outlets,
+            fact-checkers, and Reddit — in real time.
+          </p>
+          <div class="step-tags">
+            <span class="step-tag">Claim extraction</span>
+            <span class="step-tag">Live web search</span>
+            <span class="step-tag">Reddit included</span>
+          </div>
+          <div class="step-connector">→</div>
+        </div>
+
+        <div class="step fade-up fade-up-d2">
+          <div class="step-num">3</div>
+          <h3>Get your verdict</h3>
+          <p>
+            A structured verdict with a confidence percentage and clickable
+            source links appears directly next to your selection —
+            so you never lose context.
+          </p>
+          <div class="step-tags">
+            <span class="step-tag">Confidence score</span>
+            <span class="step-tag">Cited sources</span>
+            <span class="step-tag">In-page overlay</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Verdict types ──────────────────────────────────────────────────── -->
+  <section id="verdicts">
+    <div class="inner">
+      <div class="section-head fade-up">
+        <div class="section-label">Verdict system</div>
+        <h2>Not just true or false.</h2>
+        <p>Most fact-checkers give you a binary answer. We give you the full picture.</p>
+      </div>
+      <div class="verdicts-row">
+        <div class="verdict-card vc-true fade-up">
+          <div class="verdict-card-icon" style="background:rgba(52,211,153,0.15);border:1.5px solid #34d399;color:#34d399">✓</div>
+          <h4 style="color:#34d399">True</h4>
+          <p>Multiple credible sources confirm the claim with strong consensus.</p>
+        </div>
+        <div class="verdict-card vc-false fade-up fade-up-d1">
+          <div class="verdict-card-icon" style="background:rgba(248,113,113,0.15);border:1.5px solid #f87171;color:#f87171">✗</div>
+          <h4 style="color:#f87171">False</h4>
+          <p>Research clearly and directly contradicts what the claim states.</p>
+        </div>
+        <div class="verdict-card vc-mis fade-up fade-up-d2">
+          <div class="verdict-card-icon" style="background:rgba(251,191,36,0.15);border:1.5px solid #fbbf24;color:#fbbf24">⚠</div>
+          <h4 style="color:#fbbf24">Misleading</h4>
+          <p>Technically grounded but missing context that changes the meaning.</p>
+        </div>
+        <div class="verdict-card vc-unv fade-up fade-up-d3">
+          <div class="verdict-card-icon" style="background:rgba(148,163,184,0.1);border:1.5px solid #94a3b8;color:#94a3b8">?</div>
+          <h4 style="color:#94a3b8">Unverifiable</h4>
+          <p>Evidence is insufficient or conflicting. We never guess or fabricate.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Features ───────────────────────────────────────────────────────── -->
+  <section id="features">
+    <div class="inner">
+      <div class="section-head fade-up">
+        <div class="section-label">Features</div>
+        <h2>Built to handle the real internet.</h2>
+        <p>Most fact-checkers only check pre-indexed claims. This one searches live, every time.</p>
+      </div>
+
+      <div class="features-grid">
+
+        <div class="feat-card fade-up">
+          <div class="feat-icon" style="background:rgba(124,58,237,0.14)">📸</div>
+          <h3>Screenshot anything</h3>
+          <p>Drag to select any area on screen — images, tweets, charts, video screenshots, headlines. If you can see it, you can fact-check it.</p>
+        </div>
+
+        <div class="feat-card fade-up fade-up-d1">
+          <div class="feat-icon" style="background:rgba(37,99,235,0.14)">🔍</div>
+          <h3>Real-time web search</h3>
+          <p>Powered by Gemini's built-in Google Search. No separate API. Searches live news, independent fact-checkers, and Reddit discussions.</p>
+        </div>
+
+        <div class="feat-card fade-up fade-up-d2">
+          <div class="feat-icon" style="background:rgba(52,211,153,0.14)">⚡</div>
+          <h3>Results in ~3 seconds</h3>
+          <p>A three-pass pipeline — claim extraction, grounded search, verdict rendering — all orchestrated in parallel for minimal latency.</p>
+        </div>
+
+        <div class="feat-card fade-up fade-up-d3">
+          <div class="feat-icon" style="background:rgba(251,191,36,0.14)">📊</div>
+          <h3>Confidence scoring</h3>
+          <p>Every verdict includes a 0–100% confidence score reflecting the quality and consensus of evidence found — not just the AI's opinion.</p>
+        </div>
+
+        <div class="feat-card fade-up fade-up-d4">
+          <div class="feat-icon" style="background:rgba(248,113,113,0.14)">🔗</div>
+          <h3>Cited sources</h3>
+          <p>Clickable source chips with domain attribution accompany every verdict. See exactly where the AI found its evidence.</p>
+        </div>
+
+        <div class="feat-card fade-up fade-up-d5">
+          <div class="feat-icon" style="background:rgba(148,163,184,0.12)">🔒</div>
+          <h3>Completely private</h3>
+          <p>Your API key is stored locally using Chrome's secure storage. It goes directly to Google — no intermediate servers, no telemetry, no accounts.</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Browser support ────────────────────────────────────────────────── -->
+  <section id="browsers">
+    <div class="inner">
+      <div class="section-head fade-up">
+        <div class="section-label">Browser support</div>
+        <h2>Works on any Chromium browser — and many more.</h2>
+        <p>Install it once on Chrome, Brave, Edge, Opera, Arc, Vivaldi, or any other Chromium-based browser. One build, everywhere.</p>
+      </div>
+
+      <div class="browsers-row">
+        <div class="browser-card fade-up">
+          <div class="browser-card-icon">
+            <svg width="36" height="36" viewBox="0 0 36 36">
+              <circle cx="18" cy="18" r="18" fill="#fff" opacity="0.03"/>
+              <circle cx="18" cy="18" r="10" fill="#4285f4"/>
+              <circle cx="18" cy="18" r="6" fill="white" opacity="0.95"/>
+              <rect x="18" y="4" width="14" height="5" rx="2.5"
+                transform="rotate(0 18 18) translate(-7 -14)" fill="#ea4335"/>
+              <rect x="18" y="4" width="14" height="5" rx="2.5"
+                transform="rotate(120 18 18) translate(-7 -14)" fill="#34a853"/>
+              <rect x="18" y="4" width="14" height="5" rx="2.5"
+                transform="rotate(240 18 18) translate(-7 -14)" fill="#fbbc04"/>
+            </svg>
+          </div>
+          <h4>Chrome</h4>
+          <p>Full support.<br/>Chrome 105+</p>
+        </div>
+
+        <div class="browser-card fade-up fade-up-d1">
+          <div class="browser-card-icon" style="font-size:32px">🦁</div>
+          <h4>Brave</h4>
+          <p>Full support.<br/>All versions</p>
+        </div>
+
+        <div class="browser-card fade-up fade-up-d2">
+          <div class="browser-card-icon">
+            <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+              <circle cx="18" cy="18" r="18" fill="#0078d7" opacity="0.1"/>
+              <path d="M5 22c0-8 9-15 18-9-4 0-8 2-10 7H5Z" fill="#0078d7"/>
+              <path d="M5 22c2 8 14 11 20 5-3 2-8 2-11-2l-9-3Z" fill="#1ba1e2"/>
+              <path d="M25 13c3 4 3 10-1 13l-3-3c3-2 4-7 4-10Z" fill="#0050ad"/>
+              <circle cx="20" cy="22" r="4" fill="white" opacity="0.9"/>
+            </svg>
+          </div>
+          <h4>Edge</h4>
+          <p>Full support.<br/>Edge 105+</p>
+        </div>
+
+        <div class="browser-card fade-up fade-up-d3">
+          <div class="browser-card-icon">
+            <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+              <circle cx="18" cy="18" r="16" fill="#cc0f16" opacity="0.12"/>
+              <circle cx="18" cy="18" r="13" fill="none" stroke="#cc0f16" stroke-width="5.5"/>
+              <circle cx="18" cy="18" r="5" fill="#cc0f16"/>
+            </svg>
+          </div>
+          <h4>Opera</h4>
+          <p>Full support.<br/>Opera 91+</p>
+        </div>
+
+        <div class="browser-card fade-up fade-up-d4" style="border-style:dashed;opacity:0.55;">
+          <div class="browser-card-icon" style="font-size:28px;font-weight:800;color:rgba(255,255,255,0.4);">+</div>
+          <h4 style="color:rgba(255,255,255,0.5);">And more</h4>
+          <p>Arc, Vivaldi,<br/>any Chromium</p>
+        </div>
+      </div>
+
+      <p class="browser-note fade-up fade-up-d4" style="padding-top:4px;">
+        Arc, Vivaldi, Yandex Browser, Whale, and any other Chromium-based browser also work. One extension — everywhere.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── Download CTA ───────────────────────────────────────────────────── -->
+  <section id="download">
+    <div class="inner">
+      <div class="cta-box fade-up">
+        <h2>Start verifying<br><span class="grad-text">in 60 seconds.</span></h2>
+        <p>One free API key. No credit card. No account. No data stored anywhere.</p>
+
+        <div class="cta-steps">
+          <div class="cta-step">
+            <div class="cta-step-num">1</div>
+            <span class="cta-step-text">Download &amp; unzip the extension</span>
+          </div>
+          <span class="cta-arrow">→</span>
+          <div class="cta-step">
+            <div class="cta-step-num">2</div>
+            <span class="cta-step-text">Load unpacked in your browser's extension settings</span>
+          </div>
+          <span class="cta-arrow">→</span>
+          <div class="cta-step">
+            <div class="cta-step-num">3</div>
+            <span class="cta-step-text">Paste your free <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Gemini API key</a></span>
+          </div>
+        </div>
+
+        <a href="https://github.com/KamalReddy2901/factchecker-ai/releases/latest/download/factchecker-ai.zip"
+           id="download-btn" class="btn-primary" style="font-size:16px; padding:15px 32px; margin: 0 auto; display: inline-flex;" download>
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+            <path d="M8 11L4 7h2.5V2h3v5H12L8 11Z" fill="white"/>
+            <path d="M2 14h12" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          Download FactChecker AI — Free
+        </a>
+
+        <!-- Sideloading guide — collapsible -->
+        <details style="margin-top:28px;text-align:left;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:18px 22px;">
+          <summary style="cursor:pointer;font-size:14px;font-weight:600;color:rgba(255,255,255,0.55);list-style:none;display:flex;align-items:center;gap:10px;user-select:none;">
+            <span style="background:rgba(124,58,237,0.18);border-radius:6px;padding:2px 9px;font-size:11px;color:#a78bfa;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">How to install</span>
+            Step-by-step instructions ↓
+          </summary>
+          <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px;">
+            <p style="font-size:12px;color:rgba(255,255,255,0.3);margin-bottom:4px;">Because this extension ships outside the Chrome Web Store, you install it in Developer Mode — a standard, safe, built-in browser feature supported by all Chromium browsers. This is how developers and power-users have always sideloaded trusted extensions.</p>
+            <div style="display:flex;gap:14px;align-items:flex-start;">
+              <div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#2563eb);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:white;flex-shrink:0;margin-top:1px;">1</div>
+              <div><p style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.85);margin-bottom:3px;">Download &amp; unzip</p><p style="font-size:13px;color:rgba(255,255,255,0.45);line-height:1.55;">Click the button above. Save and unzip the file to a permanent folder — Chrome needs the folder to stay there.</p></div>
+            </div>
+            <div style="display:flex;gap:14px;align-items:flex-start;">
+              <div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#2563eb);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:white;flex-shrink:0;margin-top:1px;">2</div>
+              <div><p style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.85);margin-bottom:3px;">Enable Developer Mode</p><p style="font-size:13px;color:rgba(255,255,255,0.45);line-height:1.55;">Open your browser's extension manager: <code style="background:rgba(255,255,255,0.08);border-radius:5px;padding:1px 6px;font-size:12px;color:rgba(255,255,255,0.7);">chrome://extensions</code> (Chrome/Brave/Opera) or <code style="background:rgba(255,255,255,0.08);border-radius:5px;padding:1px 6px;font-size:12px;color:rgba(255,255,255,0.7);">edge://extensions</code> (Edge). Toggle <strong style="color:rgba(255,255,255,0.65);">Developer mode</strong> on — it's the switch in the top-right corner.</p></div>
+            </div>
+            <div style="display:flex;gap:14px;align-items:flex-start;">
+              <div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#2563eb);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:white;flex-shrink:0;margin-top:1px;">3</div>
+              <div><p style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.85);margin-bottom:3px;">Click "Load unpacked"</p><p style="font-size:13px;color:rgba(255,255,255,0.45);line-height:1.55;">Click <strong style="color:rgba(255,255,255,0.65);">Load unpacked</strong> and select the unzipped folder. FactChecker AI will appear instantly.</p></div>
+            </div>
+            <div style="display:flex;gap:14px;align-items:flex-start;">
+              <div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#2563eb);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:white;flex-shrink:0;margin-top:1px;">4</div>
+              <div><p style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.85);margin-bottom:3px;">Add your API key</p><p style="font-size:13px;color:rgba(255,255,255,0.45);line-height:1.55;">Click the extension icon → open Settings → paste your <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" style="color:#8b5cf6;">free Gemini API key</a>. You're done.</p></div>
+            </div>
+          </div>
+        </details>
+
+        <div class="cta-trust">
+          <span class="cta-trust-item">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M7 1.5L8.5 5h3.5l-2.8 2 1.1 3.5L7 8.5l-3.3 2 1.1-3.5L2 5h3.5L7 1.5Z" fill="rgba(255,255,255,0.25)"/>
+            </svg>
+            Free forever
+          </span>
+          <span class="cta-trust-item">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <rect x="3" y="6" width="8" height="6" rx="1.5" stroke="rgba(255,255,255,0.25)" stroke-width="1.3"/>
+              <path d="M5 6V4.5a2 2 0 014 0V6" stroke="rgba(255,255,255,0.25)" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+            No sign-up required
+          </span>
+          <span class="cta-trust-item">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="7" r="5.5" stroke="rgba(255,255,255,0.25)" stroke-width="1.3"/>
+              <path d="M5 7l1.5 1.5L9.5 5" stroke="rgba(255,255,255,0.25)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Data stays on your device
+          </span>
+          <span class="cta-trust-item">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 4l5-2 5 2v4c0 2.5-2 4-5 5-3-1-5-2.5-5-5V4Z" stroke="rgba(255,255,255,0.25)" stroke-width="1.3"/>
+            </svg>
+            Chrome MV3 compliant
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ─────────────────────────────────────────────────────────── -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-logo">
+        <div class="footer-logo-icon">
+          <svg width="16" height="16" viewBox="0 0 100 100" fill="none">
+            <circle cx="43" cy="43" r="21" stroke="white" stroke-width="9"/>
+            <path d="M33 43 L40 51 L55 33" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="59" y1="59" x2="75" y2="76" stroke="white" stroke-width="9.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="footer-logo-name"><span class="grad-text">FactChecker AI</span></span>
+      </div>
+
+      <ul class="footer-links">
+        <li><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Get API Key</a></li>
+        <li><a href="https://github.com/KamalReddy2901/factchecker-ai" target="_blank" rel="noopener">GitHub</a></li>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="privacy.html">Privacy</a></li>
+      </ul>
+
+      <span class="footer-made">
+        Built with Gemini AI &amp; open-source ♥
+      </span>
+    </div>
+  </footer>
+
+  <script>
+    // ── Navbar scroll effect ────────────────────────────────────────────
+    const nav = document.getElementById('nav');
+    window.addEventListener('scroll', () => {
+      nav.classList.toggle('scrolled', window.scrollY > 20);
+    }, { passive: true });
+
+    // ── Scroll-in animations (IntersectionObserver) ─────────────────────
+    const observer = new IntersectionObserver(
+      (entries) => entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+          observer.unobserve(e.target);
+        }
+      }),
+      { threshold: 0.12, rootMargin: '0px 0px -40px 0px' }
+    );
+    document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+    // ── Card tilt on mousemove ──────────────────────────────────────────
+    document.querySelectorAll('.feat-card, .step, .verdict-card, .browser-card').forEach(card => {
+      card.addEventListener('mousemove', (e) => {
+        const rect = card.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width  - 0.5;
+        const y = (e.clientY - rect.top)  / rect.height - 0.5;
+        card.style.transform = `perspective(600px) rotateY(${x * 6}deg) rotateX(${-y * 6}deg) translateY(-4px)`;
+      });
+      card.addEventListener('mouseleave', () => {
+        card.style.transform = '';
+        card.style.transition = 'transform 0.4s ease, border-color 0.25s, box-shadow 0.25s';
+      });
+      card.addEventListener('mouseenter', () => {
+        card.style.transition = 'transform 0.08s linear, border-color 0.25s, box-shadow 0.25s';
+      });
+    });
+
+    // ── Smooth scroll for anchor links ──────────────────────────────────
+    document.querySelectorAll('a[href^="#"]').forEach(a => {
+      a.addEventListener('click', (e) => {
+        const id = a.getAttribute('href').slice(1);
+        if (!id) return;
+        const target = document.getElementById(id);
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+
+    // ── Hero: Mark elements visible immediately ─────────────────────────
+    // (hero fade-ups don't have the class set yet since they're above the fold)
+    document.querySelectorAll('#hero .fade-up, #proof .fade-up').forEach(el => {
+      setTimeout(() => el.classList.add('visible'), 200);
+    });
+  </script>
+
+</body>
+</html>
