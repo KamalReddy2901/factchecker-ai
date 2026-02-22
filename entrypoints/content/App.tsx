@@ -102,6 +102,19 @@ export default function App() {
     return () => chrome.runtime.onMessage.removeListener(listener);
   }, [handleTextCheck]);
 
+  // Auto-timeout: if loading for more than 30 s → show error
+  useEffect(() => {
+    if (state.mode !== 'loading') return;
+    const timer = setTimeout(() => {
+      setState((prev) =>
+        prev.mode === 'loading'
+          ? { mode: 'error', message: 'Request timed out. Please try again.', position: prev.position }
+          : prev
+      );
+    }, 30000);
+    return () => clearTimeout(timer);
+  }, [state.mode]);
+
   return (
     <AnimatePresence>
       {state.mode === 'overlay' && (

@@ -120,6 +120,13 @@ export default function FloatingWidget({ status, result, error, position, onDism
     };
   }, [onDismiss]);
 
+  // Escape key to dismiss
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onDismiss(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onDismiss]);
+
   const handleCopy = useCallback(async () => {
     if (!cardRef.current || copyState !== 'idle') return;
     setCopyState('copying');
@@ -312,8 +319,23 @@ export default function FloatingWidget({ status, result, error, position, onDism
                   </>
                 ) : error === 'NO_CLAIM' ? (
                   '🔍 No verifiable claim found. Try selecting text containing a specific factual statement.'
+                ) : error === 'Request timed out. Please try again.' ? (
+                  '⏱ The fact-check timed out. Check your internet connection and try again.'
+                ) : error.includes('quota') || error.includes('RESOURCE_EXHAUSTED') ? (
+                  '📈 Gemini API quota exceeded. Wait a moment and try again, or check your plan at aistudio.google.com.'
+                ) : error.includes('API_KEY_INVALID') || error.includes('invalid API key') ? (
+                  <>
+                    🔑 Invalid API key.{' '}
+                    <button
+                      onClick={() => chrome.runtime.sendMessage({ type: 'OPEN_OPTIONS' })}
+                      style={{ background: 'none', border: 'none', color: '#f87171', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 13 }}
+                    >
+                      Open options
+                    </button>{' '}
+                    to update it.
+                  </>
                 ) : (
-                  `Error: ${error}`
+                  `⚠️ ${error}`
                 )}
               </p>
             </motion.div>
