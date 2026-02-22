@@ -5,9 +5,9 @@ const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 // Ordered list of models to try — primary first, fallbacks when quota is exceeded
 const GEMINI_MODELS = [
   'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
   'gemini-2.0-flash',
   'gemini-2.0-flash-lite',
-  'gemini-2.0-flash-exp',
 ];
 
 function isQuotaError(err: unknown): boolean {
