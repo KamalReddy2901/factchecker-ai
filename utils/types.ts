@@ -4,6 +4,7 @@ export type FactCheckStatus =
   | 'reading'
   | 'searching'
   | 'analyzing'
+  | 'switching_model'
   | 'done'
   | 'error';
 

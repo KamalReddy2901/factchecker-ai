@@ -18,6 +18,7 @@ const STATUS_LABELS: Record<string, string> = {
   reading: 'Reading content…',
   searching: 'Searching sources…',
   analyzing: 'Analyzing evidence…',
+  switching_model: 'Quota exceeded — trying next model…',
 };
 
 const VERDICT_CONFIG = {
@@ -258,7 +259,9 @@ export default function FloatingWidget({ status, result, error, position, onDism
                     width: 7,
                     height: 7,
                     borderRadius: '50%',
-                    background: 'rgba(139,92,246,0.85)',
+                    background: status === 'switching_model'
+                      ? 'rgba(251,191,36,0.9)'
+                      : 'rgba(139,92,246,0.85)',
                     flexShrink: 0,
                   }}
                 />
@@ -321,6 +324,8 @@ export default function FloatingWidget({ status, result, error, position, onDism
                   '🔍 No verifiable claim found. Try selecting text containing a specific factual statement.'
                 ) : error === 'Request timed out. Please try again.' ? (
                   '⏱ The fact-check timed out. Check your internet connection and try again.'
+                ) : error === 'ALL_MODELS_QUOTA_EXCEEDED' ? (
+                  '🚫 All available Gemini models have exceeded their quota. Wait a while and try again, or upgrade your plan at aistudio.google.com.'
                 ) : error.includes('quota') || error.includes('RESOURCE_EXHAUSTED') ? (
                   '📈 Gemini API quota exceeded. Wait a moment and try again, or check your plan at aistudio.google.com.'
                 ) : error.includes('API_KEY_INVALID') || error.includes('invalid API key') ? (

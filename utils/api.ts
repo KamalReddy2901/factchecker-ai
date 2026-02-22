@@ -1,7 +1,25 @@
 import type { Source, FactCheckResult, Verdict } from './types';
 
-const GEMINI_BASE =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+// Ordered list of models to try — primary first, fallbacks when quota is exceeded
+const GEMINI_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+];
+
+function isQuotaError(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    msg.includes('quota') ||
+    msg.includes('rate limit') ||
+    msg.includes('resource_exhausted') ||
+    msg.includes('429') ||
+    msg.includes('too many requests')
+  );
+}
 
 interface ClaimExtraction {
   claim: string;
@@ -15,9 +33,10 @@ interface GroundingChunk {
 
 async function geminiCall(
   key: string,
+  model: string,
   body: object
 ): Promise<{ data: any; ok: boolean; status: number }> {
-  const res = await fetch(`${GEMINI_BASE}?key=${key}`, {
+  const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${key}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -32,6 +51,7 @@ async function geminiCall(
 // ─── Pass 1: Extract verifiable claim from image or text ─────────────────────
 export async function extractClaim(
   geminiKey: string,
+  model: string,
   imageBase64: string | null,
   text: string | null
 ): Promise<ClaimExtraction> {
@@ -61,7 +81,7 @@ Rules:
 - Keep claim concise but complete enough to be checked`,
   });
 
-  const { data } = await geminiCall(geminiKey, {
+  const { data } = await geminiCall(geminiKey, model, {
     contents: [{ role: 'user', parts }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
   });
@@ -76,10 +96,11 @@ Rules:
 // Pass 3 then structures the result into JSON.
 export async function groundedSearch(
   geminiKey: string,
+  model: string,
   claim: string,
   searchQuery: string
 ): Promise<{ summary: string; sources: Source[] }> {
-  const { data } = await geminiCall(geminiKey, {
+  const { data } = await geminiCall(geminiKey, model, {
     contents: [
       {
         role: 'user',
@@ -138,6 +159,7 @@ Instructions:
 // ─── Pass 3: Render structured JSON verdict from grounded evidence ────────────
 export async function renderVerdict(
   geminiKey: string,
+  model: string,
   claim: string,
   groundedSummary: string,
   sources: Source[]
@@ -149,7 +171,7 @@ export async function renderVerdict(
           .join('\n')
       : 'None listed.';
 
-  const { data } = await geminiCall(geminiKey, {
+  const { data } = await geminiCall(geminiKey, model, {
     contents: [
       {
         role: 'user',
@@ -207,43 +229,76 @@ Verdict rules:
   };
 }
 
-// ─── Full 3-pass pipeline orchestrator ────────────────────────────────────────
+// ─── Full 3-pass pipeline orchestrator with model fallback ───────────────────
 export async function runFactCheck(
   geminiKey: string,
   input: { imageBase64?: string; text?: string },
   meta: { pageUrl: string; pageTitle: string },
   onStatus: (s: string) => void
 ): Promise<FactCheckResult> {
-  onStatus('reading');
-  const extraction = await extractClaim(
-    geminiKey,
-    input.imageBase64 ?? null,
-    input.text ?? null
-  );
+  for (let i = 0; i < GEMINI_MODELS.length; i++) {
+    const model = GEMINI_MODELS[i];
 
-  if (!extraction.has_verifiable_claim || !extraction.claim) {
-    throw new Error('NO_CLAIM');
+    if (i > 0) {
+      // Let the UI show a brief "switching model" state before retrying
+      onStatus('switching_model');
+      await new Promise((r) => setTimeout(r, 900));
+    }
+
+    try {
+      onStatus('reading');
+      const extraction = await extractClaim(
+        geminiKey,
+        model,
+        input.imageBase64 ?? null,
+        input.text ?? null
+      );
+
+      if (!extraction.has_verifiable_claim || !extraction.claim) {
+        throw new Error('NO_CLAIM');
+      }
+
+      onStatus('searching');
+      const { summary: groundedSummary, sources } = await groundedSearch(
+        geminiKey,
+        model,
+        extraction.claim,
+        extraction.search_query || extraction.claim
+      );
+
+      onStatus('analyzing');
+      const verdict = await renderVerdict(
+        geminiKey,
+        model,
+        extraction.claim,
+        groundedSummary,
+        sources
+      );
+
+      return {
+        ...verdict,
+        timestamp: Date.now(),
+        pageUrl: meta.pageUrl,
+        pageTitle: meta.pageTitle,
+      };
+    } catch (err) {
+      // Never retry on NO_CLAIM — the content just isn't verifiable
+      if (err instanceof Error && err.message === 'NO_CLAIM') throw err;
+
+      if (isQuotaError(err)) {
+        if (i < GEMINI_MODELS.length - 1) {
+          // More models to try — loop to next
+          continue;
+        }
+        // All models exhausted
+        throw new Error('ALL_MODELS_QUOTA_EXCEEDED');
+      }
+
+      // Non-quota error — propagate immediately
+      throw err;
+    }
   }
 
-  onStatus('searching');
-  const { summary: groundedSummary, sources } = await groundedSearch(
-    geminiKey,
-    extraction.claim,
-    extraction.search_query || extraction.claim
-  );
-
-  onStatus('analyzing');
-  const verdict = await renderVerdict(
-    geminiKey,
-    extraction.claim,
-    groundedSummary,
-    sources
-  );
-
-  return {
-    ...verdict,
-    timestamp: Date.now(),
-    pageUrl: meta.pageUrl,
-    pageTitle: meta.pageTitle,
-  };
+  // Should never reach here, but satisfies TypeScript
+  throw new Error('ALL_MODELS_QUOTA_EXCEEDED');
 }

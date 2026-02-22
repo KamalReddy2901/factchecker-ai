@@ -102,7 +102,8 @@ export default function App() {
     return () => chrome.runtime.onMessage.removeListener(listener);
   }, [handleTextCheck]);
 
-  // Auto-timeout: if loading for more than 30 s → show error
+  // Auto-timeout: if loading for more than 60 s → show error
+  // (extended to allow time for model-fallback cycling across up to 4 models)
   useEffect(() => {
     if (state.mode !== 'loading') return;
     const timer = setTimeout(() => {
@@ -111,7 +112,7 @@ export default function App() {
           ? { mode: 'error', message: 'Request timed out. Please try again.', position: prev.position }
           : prev
       );
-    }, 30000);
+    }, 60000);
     return () => clearTimeout(timer);
   }, [state.mode]);
 
